@@ -19,6 +19,19 @@ Demonstrates ArgoCD Image Updater's ability to:
 | `/` | HTML page with version info |
 | `/health` | Health check (JSON) |
 | `/version` | Version details (JSON) |
+| `/metrics` | Prometheus metrics |
+
+## Observability
+
+This app exposes Prometheus metrics for the EpochCloud observability stack:
+
+| Metric | Type | Description |
+| ------ | ---- | ----------- |
+| `epochcloud_http_requests_total` | Counter | Total HTTP requests by method, path, and status |
+| `epochcloud_http_request_duration_seconds` | Histogram | Request latency distribution |
+| `epochcloud_app_info` | Gauge | App metadata (version, commit) |
+
+The PodMonitor in kube-prometheus-stack auto-discovers all pods with `app.kubernetes.io/part-of: epochcloud` label.
 
 ## How It Works
 

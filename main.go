@@ -6,7 +6,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -14,6 +19,32 @@ var (
 	Version   = "dev"
 	Commit    = "unknown"
 	BuildTime = "unknown"
+
+	// Prometheus metrics
+	httpRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "epochcloud_http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"method", "path", "status"},
+	)
+
+	httpRequestDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "epochcloud_http_request_duration_seconds",
+			Help:    "HTTP request duration in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "path"},
+	)
+
+	appInfo = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "epochcloud_app_info",
+			Help: "Application information",
+		},
+		[]string{"version", "commit", "app"},
+	)
 )
 
 type HealthResponse struct {
@@ -36,6 +67,29 @@ type PageData struct {
 	Hostname    string
 	Environment string
 	Timestamp   string
+}
+
+// statusRecorder wraps http.ResponseWriter to capture the status code
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (sr *statusRecorder) WriteHeader(code int) {
+	sr.statusCode = code
+	sr.ResponseWriter.WriteHeader(code)
+}
+
+// metricsMiddleware wraps a handler to record metrics
+func metricsMiddleware(path string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sr := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		next(sr, r)
+		duration := time.Since(start).Seconds()
+		httpRequestsTotal.WithLabelValues(r.Method, path, strconv.Itoa(sr.statusCode)).Inc()
+		httpRequestDuration.WithLabelValues(r.Method, path).Observe(duration)
+	}
 }
 
 const pageTemplate = `<!DOCTYPE html>
@@ -111,19 +165,22 @@ func main() {
 		env = "dev"
 	}
 
+	// Set app info metric
+	appInfo.WithLabelValues(Version, Commit, "test-image-updater").Set(1)
+
 	tmpl := template.Must(template.New("page").Parse(pageTemplate))
 
 	// Health endpoint
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/health", metricsMiddleware("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(HealthResponse{
 			Status:    "healthy",
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		})
-	})
+	}))
 
 	// Version endpoint
-	http.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/version", metricsMiddleware("/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(VersionResponse{
 			Version:     Version,
@@ -132,10 +189,13 @@ func main() {
 			Hostname:    hostname,
 			Environment: env,
 		})
-	})
+	}))
+
+	// Prometheus metrics endpoint
+	http.Handle("/metrics", promhttp.Handler())
 
 	// Main page
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", metricsMiddleware("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
@@ -149,7 +209,7 @@ func main() {
 			Environment: env,
 			Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		})
-	})
+	}))
 
 	port := os.Getenv("PORT")
 	if port == "" {
