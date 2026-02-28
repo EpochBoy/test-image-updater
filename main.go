@@ -61,12 +61,14 @@ type VersionResponse struct {
 }
 
 type PageData struct {
-	Version     string
-	Commit      string
-	BuildTime   string
-	Hostname    string
-	Environment string
-	Timestamp   string
+	Version       string
+	Commit        string
+	BuildTime     string
+	Hostname      string
+	Environment   string
+	Timestamp     string
+	RybbitSiteID  string
+	RybbitHost    string
 }
 
 // statusRecorder wraps http.ResponseWriter to capture the status code
@@ -141,6 +143,7 @@ const pageTemplate = `<!DOCTYPE html>
         .env-staging { background: #feca57; color: #1a1a2e; }
         .env-prod { background: #00d26a; }
     </style>
+    {{if and .RybbitSiteID .RybbitHost}}<script src="{{.RybbitHost}}/script.js" data-site-id="{{.RybbitSiteID}}" defer></script>{{end}}
 </head>
 <body>
     <div class="container">
@@ -164,6 +167,9 @@ func main() {
 	if env == "" {
 		env = "dev"
 	}
+
+	rybbitSiteID := os.Getenv("RYBBIT_SITE_ID")
+	rybbitHost := os.Getenv("RYBBIT_HOST")
 
 	// Set app info metric
 	appInfo.WithLabelValues(Version, Commit, "test-image-updater").Set(1)
@@ -202,12 +208,14 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		tmpl.Execute(w, PageData{
-			Version:     Version,
-			Commit:      Commit,
-			BuildTime:   BuildTime,
-			Hostname:    hostname,
-			Environment: env,
-			Timestamp:   time.Now().UTC().Format(time.RFC3339),
+			Version:      Version,
+			Commit:       Commit,
+			BuildTime:    BuildTime,
+			Hostname:     hostname,
+			Environment:  env,
+			Timestamp:    time.Now().UTC().Format(time.RFC3339),
+			RybbitSiteID: rybbitSiteID,
+			RybbitHost:   rybbitHost,
 		})
 	}))
 
