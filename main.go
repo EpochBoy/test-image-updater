@@ -143,7 +143,7 @@ const pageTemplate = `<!DOCTYPE html>
         .env-staging { background: #feca57; color: #1a1a2e; }
         .env-prod { background: #00d26a; }
     </style>
-    {{if and .RybbitSiteID .RybbitHost}}<script src="{{.RybbitHost}}/script.js" data-site-id="{{.RybbitSiteID}}" defer></script>{{end}}
+    {{if and .RybbitSiteID .RybbitHost}}<script src="{{.RybbitHost}}/api/script.js" data-site-id="{{.RybbitSiteID}}" defer></script>{{end}}
 </head>
 <body>
     <div class="container">
