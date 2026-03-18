@@ -143,7 +143,7 @@ const pageTemplate = `<!DOCTYPE html>
         .env-staging { background: #feca57; color: #1a1a2e; }
         .env-prod { background: #00d26a; }
     </style>
-    {{if and .RybbitSiteID .RybbitHost}}<script src="{{.RybbitHost}}/api/script.js" data-site-id="{{.RybbitSiteID}}" defer></script>{{end}}
+    {{if .RybbitSiteID}}<!-- First-party proxy: /_a/ is rewritten to /api/ by Traefik and forwarded to Rybbit backend (bypasses ad blockers) --><script src="/_a/script.js" data-site-id="{{.RybbitSiteID}}" defer></script>{{end}}
 </head>
 <body>
     <div class="container">
